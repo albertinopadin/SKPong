@@ -12,23 +12,34 @@ import GameplayKit
 class GameScene: SKScene {
     
     private var label : SKLabelNode?
-    private var spinnyNode : SKShapeNode?
     private var palletNode: SKShapeNode?
+    private var ballNode: SKShapeNode?
     
     private var palletNodeY: CGFloat?
     private var palletNodeXMinBound: CGFloat?
     private var palletNodeXMaxBound: CGFloat?
     
     override func didMove(to view: SKView) {
+        // Instantiate Pallet Node:
         let palletNodeSize = CGSize.init(width: self.size.width/5, height: self.size.height/40)
         self.palletNode = SKShapeNode.init(rectOf: palletNodeSize, cornerRadius: 10.0)
         self.palletNode?.fillColor = .blue
+        self.palletNode?.strokeColor = .white
         palletNodeY = palletNodeSize.height + 20
         palletNodeXMinBound = palletNodeSize.width  // How does this even work, should be /2...
         palletNodeXMaxBound = self.frame.width - palletNodeXMinBound!
-        let initialPosition = CGPoint(x: self.frame.midX, y: palletNodeY!)
-        self.palletNode?.position = initialPosition
+        let initialPalletPosition = CGPoint(x: self.frame.midX, y: palletNodeY!)
+        self.palletNode?.position = initialPalletPosition
         self.addChild(self.palletNode!)
+        
+        // Instantiate Ball Node:
+        let ballRadius = palletNodeSize.width / 8
+        self.ballNode = SKShapeNode.init(circleOfRadius: ballRadius)
+        self.ballNode?.fillColor = .yellow
+        self.ballNode?.strokeColor = .white
+        let initialBallPosition = CGPoint.init(x: self.frame.midX, y: self.frame.midY)
+        self.ballNode?.position = initialBallPosition
+        self.addChild(self.ballNode!)
     }
     
     
@@ -53,14 +64,12 @@ class GameScene: SKScene {
     func touchMoved(toPoint pos : CGPoint) {
         if let n = self.palletNode {
             n.position.x = calculatePalletNodeXPosition(touchPosition: pos)
-            n.strokeColor = SKColor.blue
         }
     }
     
     func touchUp(atPoint pos : CGPoint) {
         if let n = self.palletNode {
             n.position.x = calculatePalletNodeXPosition(touchPosition: pos)
-            n.strokeColor = SKColor.red
         }
     }
     
