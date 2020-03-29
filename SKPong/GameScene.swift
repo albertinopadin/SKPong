@@ -9,7 +9,7 @@
 import SpriteKit
 import GameplayKit
 
-class GameScene: SKScene {
+class GameScene: SKScene, SKPhysicsContactDelegate {
     
     private var label : SKLabelNode?
     private var palletNode: SKShapeNode?
@@ -19,29 +19,56 @@ class GameScene: SKScene {
     private var palletNodeXMinBound: CGFloat?
     private var palletNodeXMaxBound: CGFloat?
     
+    private let palletCategory: UInt32 = 0x1 << 1
+    private let ballCategory: UInt32 = 0x1 << 0
+    
     override func didMove(to view: SKView) {
         // Instantiate Pallet Node:
-        let palletNodeSize = CGSize.init(width: self.size.width/5, height: self.size.height/40)
-        self.palletNode = SKShapeNode.init(rectOf: palletNodeSize, cornerRadius: 10.0)
-        self.palletNode?.fillColor = .blue
-        self.palletNode?.strokeColor = .white
-        palletNodeY = palletNodeSize.height + 20
-        palletNodeXMinBound = palletNodeSize.width  // How does this even work, should be /2...
-        palletNodeXMaxBound = self.frame.width - palletNodeXMinBound!
-        let initialPalletPosition = CGPoint(x: self.frame.midX, y: palletNodeY!)
-        self.palletNode?.position = initialPalletPosition
+        let palletNodeSize = CGSize(width: self.size.width/5, height: self.size.height/40)
+        self.palletNode = self.createPalletNode(size: palletNodeSize)
         self.addChild(self.palletNode!)
         
         // Instantiate Ball Node:
         let ballRadius = palletNodeSize.width / 8
-        self.ballNode = SKShapeNode.init(circleOfRadius: ballRadius)
-        self.ballNode?.fillColor = .yellow
-        self.ballNode?.strokeColor = .white
-        let initialBallPosition = CGPoint.init(x: self.frame.midX, y: self.frame.midY)
-        self.ballNode?.position = initialBallPosition
+        self.ballNode = self.createBallNode(radius: ballRadius)
         self.addChild(self.ballNode!)
+        
+        self.physicsWorld.gravity = CGVector(dx: 0, dy: 0)
+        self.physicsWorld.contactDelegate = self
     }
     
+    func createPalletNode(size: CGSize) -> SKShapeNode {
+        let pallet = SKShapeNode(rectOf: size, cornerRadius: 10.0)
+        pallet.fillColor = .blue
+        pallet.strokeColor = .white
+        palletNodeY = size.height + 20
+        palletNodeXMinBound = size.width  // How does this even work, should be /2...
+        palletNodeXMaxBound = self.frame.width - palletNodeXMinBound!
+        let initialPalletPosition = CGPoint(x: self.frame.midX, y: palletNodeY!)
+        pallet.position = initialPalletPosition
+        pallet.physicsBody = SKPhysicsBody(rectangleOf: size)
+        pallet.physicsBody?.isDynamic = false
+        pallet.physicsBody?.restitution = 1.0
+        pallet.physicsBody?.linearDamping = 0.0
+        pallet.physicsBody?.categoryBitMask = palletCategory
+        pallet.physicsBody?.contactTestBitMask = ballCategory
+        return pallet
+    }
+    
+    func createBallNode(radius: CGFloat) -> SKShapeNode {
+        let ball = SKShapeNode.init(circleOfRadius: radius)
+        ball.fillColor = .yellow
+        ball.strokeColor = .white
+        let initialBallPosition = CGPoint(x: self.frame.midX, y: self.frame.midY)
+        ball.position = initialBallPosition
+        ball.physicsBody = SKPhysicsBody(circleOfRadius: radius)
+        ball.physicsBody?.isDynamic = true
+        ball.physicsBody?.restitution = 1.0
+        ball.physicsBody?.linearDamping = 0.0
+        ball.physicsBody?.categoryBitMask = ballCategory
+        ball.physicsBody?.contactTestBitMask = palletCategory
+        return ball
+    }
     
     func calculatePalletNodeXPosition(touchPosition: CGPoint) -> CGFloat {
         if touchPosition.x < palletNodeXMinBound! {
@@ -53,12 +80,16 @@ class GameScene: SKScene {
         }
     }
     
+    func didBegin(_ contact: SKPhysicsContact) {
+        // TODO
+    }
     
     func touchDown(atPoint pos : CGPoint) {
-//        if let n = self.palletNode {
-//            n.position = pos
-//            n.strokeColor = SKColor.green
-//        }
+        if let ball = self.ballNode {
+            if ball.physicsBody?.velocity.dx == 0.0 && ball.physicsBody?.velocity.dy == 0.0 {
+                ball.physicsBody?.velocity = CGVector(dx: 0.0, dy: -200.0)
+            }
+        }
     }
     
     func touchMoved(toPoint pos : CGPoint) {
