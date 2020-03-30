@@ -12,10 +12,13 @@ import GameplayKit
 class GameScene: SKScene, SKPhysicsContactDelegate {
     
     private var label : SKLabelNode?
-    private var palletNode: SKShapeNode?
+    private var topPalletNode: SKShapeNode?
+    private var bottomPalletNode: SKShapeNode?
     private var ballNode: SKShapeNode?
     
-    private var palletNodeY: CGFloat?
+    private let palletSeparation: CGFloat = 20.0
+    private var topPalletNodeY: CGFloat?
+    private var bottomPalletNodeY: CGFloat?
     private var palletNodeXMinBound: CGFloat?
     private var palletNodeXMaxBound: CGFloat?
     
@@ -23,29 +26,36 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private let ballCategory: UInt32 = 0x1 << 0
     
     override func didMove(to view: SKView) {
-        // Instantiate Pallet Node:
+        // Instantiate Pallet Nodes:
         let palletNodeSize = CGSize(width: self.size.width/5, height: self.size.height/40)
-        self.palletNode = self.createPalletNode(size: palletNodeSize)
-        self.addChild(self.palletNode!)
+        self.palletNodeXMinBound = palletNodeSize.width  // How does this even work, should be /2...
+        self.palletNodeXMaxBound = self.frame.width - self.palletNodeXMinBound!
+        
+        self.topPalletNodeY = self.frame.height - (self.palletSeparation * 2)
+        let initialTopPalletPosition = CGPoint(x: self.frame.midX, y: self.topPalletNodeY!)
+        self.topPalletNode = self.createPalletNode(size: palletNodeSize, position: initialTopPalletPosition)
+        self.addChild(self.topPalletNode!)
+        
+        self.bottomPalletNodeY = palletNodeSize.height + self.palletSeparation
+        let initialBottomPalletPosition = CGPoint(x: self.frame.midX, y: self.bottomPalletNodeY!)
+        self.bottomPalletNode = self.createPalletNode(size: palletNodeSize, position: initialBottomPalletPosition)
+        self.addChild(self.bottomPalletNode!)
         
         // Instantiate Ball Node:
         let ballRadius = palletNodeSize.width / 8
-        self.ballNode = self.createBallNode(radius: ballRadius)
+        let initialBallPosition = CGPoint(x: self.frame.midX, y: self.frame.midY)
+        self.ballNode = self.createBallNode(radius: ballRadius, position: initialBallPosition)
         self.addChild(self.ballNode!)
         
         self.physicsWorld.gravity = CGVector(dx: 0, dy: 0)
         self.physicsWorld.contactDelegate = self
     }
     
-    func createPalletNode(size: CGSize) -> SKShapeNode {
+    func createPalletNode(size: CGSize, position: CGPoint) -> SKShapeNode {
         let pallet = SKShapeNode(rectOf: size, cornerRadius: 10.0)
         pallet.fillColor = .blue
         pallet.strokeColor = .white
-        palletNodeY = size.height + 20
-        palletNodeXMinBound = size.width  // How does this even work, should be /2...
-        palletNodeXMaxBound = self.frame.width - palletNodeXMinBound!
-        let initialPalletPosition = CGPoint(x: self.frame.midX, y: palletNodeY!)
-        pallet.position = initialPalletPosition
+        pallet.position = position
         pallet.physicsBody = SKPhysicsBody(rectangleOf: size)
         pallet.physicsBody?.isDynamic = false
         pallet.physicsBody?.restitution = 1.0
@@ -55,12 +65,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         return pallet
     }
     
-    func createBallNode(radius: CGFloat) -> SKShapeNode {
+    func createBallNode(radius: CGFloat, position: CGPoint) -> SKShapeNode {
         let ball = SKShapeNode.init(circleOfRadius: radius)
         ball.fillColor = .yellow
         ball.strokeColor = .white
-        let initialBallPosition = CGPoint(x: self.frame.midX, y: self.frame.midY)
-        ball.position = initialBallPosition
+        ball.position = position
         ball.physicsBody = SKPhysicsBody(circleOfRadius: radius)
         ball.physicsBody?.isDynamic = true
         ball.physicsBody?.restitution = 1.0
@@ -93,14 +102,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     func touchMoved(toPoint pos : CGPoint) {
-        if let n = self.palletNode {
-            n.position.x = calculatePalletNodeXPosition(touchPosition: pos)
+        if let bottomPallet = self.bottomPalletNode {
+            bottomPallet.position.x = calculatePalletNodeXPosition(touchPosition: pos)
         }
     }
     
     func touchUp(atPoint pos : CGPoint) {
-        if let n = self.palletNode {
-            n.position.x = calculatePalletNodeXPosition(touchPosition: pos)
+        if let bottomPallet = self.bottomPalletNode {
+            bottomPallet.position.x = calculatePalletNodeXPosition(touchPosition: pos)
         }
     }
     
