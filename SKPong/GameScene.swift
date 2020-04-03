@@ -12,6 +12,8 @@ import GameplayKit
 class GameScene: SKScene, SKPhysicsContactDelegate {
     
 //    private var label : SKLabelNode?
+    
+    // TODO: Use SKSpriteNode instead?
     private var topPalletNode: SKShapeNode?
     private var bottomPalletNode: SKShapeNode?
     private var ballNode: SKShapeNode?
@@ -34,6 +36,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private let wallCategory: UInt32    = 0x1 << 2
     
     private let initialBallVelocity = -300.0
+    private let ballVelocityVectorNudge: CGFloat = 10.0
+    private let minimumVelocityVectorDelta: CGFloat = 0.01
+    
+    private var gameStarted: Bool = false
     
     override func didMove(to view: SKView) {
         // Debugging:
@@ -122,7 +128,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         wall.strokeColor = .lightGray
         wall.physicsBody = SKPhysicsBody(rectangleOf: size)
         wall.physicsBody?.isDynamic = false
-        wall.physicsBody?.restitution = 1.01
+        wall.physicsBody?.restitution = 1.0
         wall.physicsBody?.friction = 0.0
         wall.physicsBody?.categoryBitMask = wallCategory
         wall.physicsBody?.contactTestBitMask = ballCategory
@@ -140,13 +146,56 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     func didBegin(_ contact: SKPhysicsContact) {
-        // TODO
+        var firstBody: SKPhysicsBody
+        var secondBody: SKPhysicsBody
+        
+        if contact.bodyA.categoryBitMask < contact.bodyB.categoryBitMask {
+            firstBody = contact.bodyA
+            secondBody = contact.bodyB
+        } else {
+            firstBody = contact.bodyB
+            secondBody = contact.bodyA
+        }
+        
+        if (firstBody.categoryBitMask & self.ballCategory) != 0 && (secondBody.categoryBitMask & self.wallCategory) != 0 {
+            self.ballDidCollideWithWall(ball: firstBody.node as! SKShapeNode,
+                                        wall: secondBody.node as! SKShapeNode)
+        }
+    }
+    
+    func ballDidCollideWithWall(ball: SKShapeNode, wall: SKShapeNode) {
+        let ballVelocityVector = ball.physicsBody!.velocity
+        print("Ball Velocity vector at contact: \(ballVelocityVector)")
+        
+        if wall == self.leftWallNode || wall == self.rightWallNode {
+            if abs(ballVelocityVector.dx) < self.minimumVelocityVectorDelta {
+                if wall == self.leftWallNode {
+                    ball.physicsBody?.velocity = CGVector(dx: self.ballVelocityVectorNudge,
+                                                          dy: ballVelocityVector.dy)
+                } else {
+                    ball.physicsBody?.velocity = CGVector(dx: -self.ballVelocityVectorNudge,
+                                                          dy: ballVelocityVector.dy)
+                }
+            }
+        } else {
+            // Top or Bottom wall contact:
+            if abs(ballVelocityVector.dy) < self.minimumVelocityVectorDelta {
+                if wall == self.bottomWallNode {
+                    ball.physicsBody?.velocity = CGVector(dx: ballVelocityVector.dx,
+                                                      dy: self.ballVelocityVectorNudge)
+                } else {
+                    ball.physicsBody?.velocity = CGVector(dx: ballVelocityVector.dx,
+                                                          dy: -self.ballVelocityVectorNudge)
+                }
+            }
+        }
     }
     
     func touchDown(atPoint pos : CGPoint) {
         if let ball = self.ballNode {
             if ball.physicsBody?.velocity.dx == 0.0 && ball.physicsBody?.velocity.dy == 0.0 {
                 ball.physicsBody?.velocity = CGVector(dx: 0.0, dy: self.initialBallVelocity)
+                self.gameStarted.toggle()
             }
         }
     }
@@ -182,5 +231,19 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     override func update(_ currentTime: TimeInterval) {
         // Called before each frame is rendered
+        
+        // If ball has no vertical movement, nudge so we can continue playing:
+        if self.gameStarted {
+            if let ball = self.ballNode {
+                let verticalVelocityVector = ball.physicsBody!.velocity.dy
+                if abs(verticalVelocityVector) < self.minimumVelocityVectorDelta {
+                    if verticalVelocityVector < 0.0 {
+                        ball.physicsBody?.velocity.dy -= self.ballVelocityVectorNudge
+                    } else {
+                        ball.physicsBody?.velocity.dy += self.ballVelocityVectorNudge
+                    }
+                }
+            }
+        }
     }
 }
