@@ -35,8 +35,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private let palletCategory: UInt32  = 0x1 << 1
     private let wallCategory: UInt32    = 0x1 << 2
     
-    private let initialBallVelocity = -300.0
-    private let ballVelocityVectorNudge: CGFloat = 10.0
+    private let minimumBallVelocity: CGFloat = 300.0
+    private let initialBallVelocity: CGFloat = -300.0
+    private let ballVelocityVectorNudge: CGFloat = 20.0
     private let minimumVelocityVectorDelta: CGFloat = 0.01
     
     private var gameStarted: Bool = false
@@ -47,50 +48,48 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Instantiate Pallet Nodes:
         let palletNodeSize = CGSize(width: self.size.width/5, height: self.size.height/40)
-        self.palletNodeXMinBound = palletNodeSize.width  // How does this even work, should be /2...
-        self.palletNodeXMaxBound = self.frame.width - self.palletNodeXMinBound!
+        palletNodeXMinBound = palletNodeSize.width  // How does this even work, should be /2...
+        palletNodeXMaxBound = self.frame.width - palletNodeXMinBound!
         
-        self.topPalletNodeY = self.frame.height - (self.palletSeparation * 2)
-        let initialTopPalletPosition = CGPoint(x: self.frame.midX, y: self.topPalletNodeY!)
-        self.topPalletNode = self.createPalletNode(size: palletNodeSize, position: initialTopPalletPosition)
-        self.addChild(self.topPalletNode!)
+        topPalletNodeY = self.frame.height - (palletSeparation * 2)
+        let initialTopPalletPosition = CGPoint(x: self.frame.midX, y: topPalletNodeY!)
+        topPalletNode = createPalletNode(size: palletNodeSize, position: initialTopPalletPosition)
+        self.addChild(topPalletNode!)
         
-        self.bottomPalletNodeY = palletNodeSize.height + self.palletSeparation
-        let initialBottomPalletPosition = CGPoint(x: self.frame.midX, y: self.bottomPalletNodeY!)
-        self.bottomPalletNode = self.createPalletNode(size: palletNodeSize, position: initialBottomPalletPosition)
-        self.addChild(self.bottomPalletNode!)
+        bottomPalletNodeY = palletNodeSize.height + palletSeparation
+        let initialBottomPalletPosition = CGPoint(x: self.frame.midX, y: bottomPalletNodeY!)
+        bottomPalletNode = createPalletNode(size: palletNodeSize, position: initialBottomPalletPosition)
+        self.addChild(bottomPalletNode!)
         
         // Instantiate Ball Node:
         let ballRadius = palletNodeSize.width / 8
         let initialBallPosition = CGPoint(x: self.frame.midX, y: self.frame.midY)
-        self.ballNode = self.createBallNode(radius: ballRadius, position: initialBallPosition)
-        self.addChild(self.ballNode!)
+        ballNode = createBallNode(radius: ballRadius, position: initialBallPosition)
+        self.addChild(ballNode!)
         
         // Instantiate Wall Nodes:
         let sideWallSize = CGSize(width: 10.0, height: self.size.height)
         let leftSideWallPosition = CGPoint(x: self.frame.minX + 40, y: self.frame.midY)
-        self.leftWallNode = self.createWallNode(size: sideWallSize, position: leftSideWallPosition)
-        self.addChild(self.leftWallNode!)
+        leftWallNode = createWallNode(size: sideWallSize, position: leftSideWallPosition)
+        self.addChild(leftWallNode!)
         
         let rightSideWallPosition = CGPoint(x: self.frame.maxX - 40, y: self.frame.midY)
-        self.rightWallNode = self.createWallNode(size: sideWallSize, position: rightSideWallPosition)
-        self.addChild(self.rightWallNode!)
+        rightWallNode = createWallNode(size: sideWallSize, position: rightSideWallPosition)
+        self.addChild(rightWallNode!)
         
         let topBottomWallSize = CGSize(width: self.size.width, height: 10.0)
         let topWallPosition = CGPoint(x: self.frame.midX, y: self.frame.maxY)
-        self.topWallNode = self.createWallNode(size: topBottomWallSize, position: topWallPosition)
-        self.addChild(self.topWallNode!)
+        topWallNode = createWallNode(size: topBottomWallSize, position: topWallPosition)
+        self.addChild(topWallNode!)
         
         let bottomWallPosition = CGPoint(x: self.frame.midX, y: self.frame.minY)
-        self.bottomWallNode = self.createWallNode(size: topBottomWallSize, position: bottomWallPosition)
-        self.addChild(self.bottomWallNode!)
+        bottomWallNode = createWallNode(size: topBottomWallSize, position: bottomWallPosition)
+        self.addChild(bottomWallNode!)
         
         self.physicsWorld.gravity = CGVector(dx: 0, dy: 0)
         self.physicsWorld.contactDelegate = self
         
         // TODO: Figure out why side walls are not where they should be
-        // TODO: If ball is going perfectly horizontal, randomly impart up/down impulse
-        // TODO: If ball is going perfectly vertical near a wall, randomly impart left/right impulse.
     }
     
     func createPalletNode(size: CGSize, position: CGPoint) -> SKShapeNode {
@@ -157,57 +156,62 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             secondBody = contact.bodyA
         }
         
-        if (firstBody.categoryBitMask & self.ballCategory) != 0 && (secondBody.categoryBitMask & self.wallCategory) != 0 {
-            self.ballDidCollideWithWall(ball: firstBody.node as! SKShapeNode,
-                                        wall: secondBody.node as! SKShapeNode)
+        if (firstBody.categoryBitMask & ballCategory) != 0 && (secondBody.categoryBitMask & wallCategory) != 0 {
+            ballDidCollideWithWall(ball: firstBody.node as! SKShapeNode,
+                                   wall: secondBody.node as! SKShapeNode)
+        }
+    }
+    
+    func isAbsoluteVelocityBelowLimit(velocity: CGFloat, minLimit: CGFloat) -> Bool {
+        return abs(velocity) < minLimit
+    }
+    
+    func nudgeWallBall(ball: SKShapeNode, wall: SKShapeNode, ballVelocity: CGVector) {
+        switch wall {
+        case leftWallNode:
+            ball.physicsBody?.velocity = CGVector(dx: ballVelocity.dx + ballVelocityVectorNudge,
+                                                  dy: ballVelocity.dy)
+        case rightWallNode:
+            ball.physicsBody?.velocity = CGVector(dx: ballVelocity.dx - ballVelocityVectorNudge,
+                                                  dy: ballVelocity.dy)
+        case topWallNode:
+            ball.physicsBody?.velocity = CGVector(dx: ballVelocity.dx,
+                                                  dy: ballVelocity.dy - ballVelocityVectorNudge)
+        case bottomWallNode:
+            ball.physicsBody?.velocity = CGVector(dx: ballVelocity.dx,
+                                                  dy: ballVelocity.dy + ballVelocityVectorNudge)
+        default:
+            // This should never happen... Nudge in both directions?
+            ball.physicsBody?.velocity = CGVector(dx: ballVelocity.dx + ballVelocityVectorNudge,
+                                                  dy: ballVelocity.dy + ballVelocityVectorNudge)
         }
     }
     
     func ballDidCollideWithWall(ball: SKShapeNode, wall: SKShapeNode) {
         let ballVelocityVector = ball.physicsBody!.velocity
-        print("Ball Velocity vector at contact: \(ballVelocityVector)")
-        
-        if wall == self.leftWallNode || wall == self.rightWallNode {
-            if abs(ballVelocityVector.dx) < self.minimumVelocityVectorDelta {
-                if wall == self.leftWallNode {
-                    ball.physicsBody?.velocity = CGVector(dx: self.ballVelocityVectorNudge,
-                                                          dy: ballVelocityVector.dy)
-                } else {
-                    ball.physicsBody?.velocity = CGVector(dx: -self.ballVelocityVectorNudge,
-                                                          dy: ballVelocityVector.dy)
-                }
-            }
-        } else {
-            // Top or Bottom wall contact:
-            if abs(ballVelocityVector.dy) < self.minimumVelocityVectorDelta {
-                if wall == self.bottomWallNode {
-                    ball.physicsBody?.velocity = CGVector(dx: ballVelocityVector.dx,
-                                                      dy: self.ballVelocityVectorNudge)
-                } else {
-                    ball.physicsBody?.velocity = CGVector(dx: ballVelocityVector.dx,
-                                                          dy: -self.ballVelocityVectorNudge)
-                }
-            }
+        if isAbsoluteVelocityBelowLimit(velocity: ballVelocityVector.dx, minLimit: minimumVelocityVectorDelta) ||
+            isAbsoluteVelocityBelowLimit(velocity: ballVelocityVector.dy, minLimit: minimumVelocityVectorDelta) {
+            nudgeWallBall(ball: ball, wall: wall, ballVelocity: ballVelocityVector)
         }
     }
     
     func touchDown(atPoint pos : CGPoint) {
-        if let ball = self.ballNode {
+        if let ball = ballNode {
             if ball.physicsBody?.velocity.dx == 0.0 && ball.physicsBody?.velocity.dy == 0.0 {
-                ball.physicsBody?.velocity = CGVector(dx: 0.0, dy: self.initialBallVelocity)
-                self.gameStarted.toggle()
+                ball.physicsBody?.velocity = CGVector(dx: 0.0, dy: initialBallVelocity)
+                gameStarted.toggle()
             }
         }
     }
     
     func touchMoved(toPoint pos : CGPoint) {
-        if let bottomPallet = self.bottomPalletNode {
+        if let bottomPallet = bottomPalletNode {
             bottomPallet.position.x = calculatePalletNodeXPosition(touchPosition: pos)
         }
     }
     
     func touchUp(atPoint pos : CGPoint) {
-        if let bottomPallet = self.bottomPalletNode {
+        if let bottomPallet = bottomPalletNode {
             bottomPallet.position.x = calculatePalletNodeXPosition(touchPosition: pos)
         }
     }
@@ -228,21 +232,38 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         for t in touches { self.touchUp(atPoint: t.location(in: self)) }
     }
     
+    func nudgeBallVertically(ball: SKShapeNode, nudge: CGFloat) {
+        ball.physicsBody?.velocity.dy += nudge
+    }
+    
+    func computeVectorLength(_ vector: CGVector) -> CGFloat {
+        return hypot(vector.dx, vector.dy)
+    }
+    
+    func convertVectorToLength(_ vector: CGVector, length: CGFloat) -> CGVector {
+        let originalVectorLength = computeVectorLength(vector)
+        let dx = vector.dx * length / originalVectorLength
+        let dy = vector.dy * length / originalVectorLength
+        return CGVector(dx: dx, dy: dy)
+    }
     
     override func update(_ currentTime: TimeInterval) {
         // Called before each frame is rendered
-        
-        // If ball has no vertical movement, nudge so we can continue playing:
-        if self.gameStarted {
-            if let ball = self.ballNode {
-                let verticalVelocityVector = ball.physicsBody!.velocity.dy
-                if abs(verticalVelocityVector) < self.minimumVelocityVectorDelta {
-                    if verticalVelocityVector < 0.0 {
-                        ball.physicsBody?.velocity.dy -= self.ballVelocityVectorNudge
-                    } else {
-                        ball.physicsBody?.velocity.dy += self.ballVelocityVectorNudge
-                    }
+        if gameStarted {
+            if let ball = ballNode {
+                let ballVelocity = computeVectorLength(ball.physicsBody!.velocity)
+                if ballVelocity < minimumBallVelocity {
+                    // Always make sure ball has minimum velocity:
+                    ball.physicsBody?.velocity = convertVectorToLength(ball.physicsBody!.velocity,
+                                                                       length: minimumBallVelocity)
                 }
+                
+                // If ball has no vertical movement, nudge so we can continue playing:
+                // This may not be needed...
+//                if isAbsoluteVelocityBelowLimit(velocity: verticalVelocityVector,
+//                                                minLimit: minimumVelocityVectorDelta) {
+//                    nudgeBallVertically(ball: ball, nudge: ballVelocityVectorNudge)
+//                }
             }
         }
     }
