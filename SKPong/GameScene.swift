@@ -41,13 +41,32 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private let minimumVelocityVectorDelta: CGFloat = 0.01
     
     private var gameStarted: Bool = false
+    private var sideWallCorrection: CGFloat = 40  // TODO: Should fix the core issue, shouldn't need this...
+    private var zeroGravityVector = CGVector(dx: 0, dy: 0)
     
     override func didMove(to view: SKView) {
         // Debugging:
         print("Frame: \(self.frame)")
         
-        // Instantiate Pallet Nodes:
         let palletNodeSize = CGSize(width: self.size.width/5, height: self.size.height/40)
+        initPalletNodes(palletNodeSize: palletNodeSize)
+        
+        let ballRadius = palletNodeSize.width / 8
+        initBallNode(ballRadius: ballRadius)
+        
+        initWallNodes()
+        initPhysicsWorld()
+        
+        // TODO: Figure out why side walls are not where they should be
+        // TODO: Implement more realistic, last minute movement of top pallet
+    }
+    
+    func initPhysicsWorld() {
+        self.physicsWorld.gravity = zeroGravityVector
+        self.physicsWorld.contactDelegate = self
+    }
+    
+    func initPalletNodes(palletNodeSize: CGSize) {
         palletNodeXMinBound = palletNodeSize.width  // How does this even work, should be /2...
         palletNodeXMaxBound = self.frame.width - palletNodeXMinBound!
         
@@ -60,20 +79,21 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let initialBottomPalletPosition = CGPoint(x: self.frame.midX, y: bottomPalletNodeY!)
         bottomPalletNode = createPalletNode(size: palletNodeSize, position: initialBottomPalletPosition)
         self.addChild(bottomPalletNode!)
-        
-        // Instantiate Ball Node:
-        let ballRadius = palletNodeSize.width / 8
+    }
+    
+    func initBallNode(ballRadius: CGFloat) {
         let initialBallPosition = CGPoint(x: self.frame.midX, y: self.frame.midY)
         ballNode = createBallNode(radius: ballRadius, position: initialBallPosition)
         self.addChild(ballNode!)
-        
-        // Instantiate Wall Nodes:
+    }
+    
+    func initWallNodes() {
         let sideWallSize = CGSize(width: 10.0, height: self.size.height)
-        let leftSideWallPosition = CGPoint(x: self.frame.minX + 40, y: self.frame.midY)
+        let leftSideWallPosition = CGPoint(x: self.frame.minX + sideWallCorrection, y: self.frame.midY)
         leftWallNode = createWallNode(size: sideWallSize, position: leftSideWallPosition)
         self.addChild(leftWallNode!)
         
-        let rightSideWallPosition = CGPoint(x: self.frame.maxX - 40, y: self.frame.midY)
+        let rightSideWallPosition = CGPoint(x: self.frame.maxX - sideWallCorrection, y: self.frame.midY)
         rightWallNode = createWallNode(size: sideWallSize, position: rightSideWallPosition)
         self.addChild(rightWallNode!)
         
@@ -85,11 +105,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let bottomWallPosition = CGPoint(x: self.frame.midX, y: self.frame.minY)
         bottomWallNode = createWallNode(size: topBottomWallSize, position: bottomWallPosition)
         self.addChild(bottomWallNode!)
-        
-        self.physicsWorld.gravity = CGVector(dx: 0, dy: 0)
-        self.physicsWorld.contactDelegate = self
-        
-        // TODO: Figure out why side walls are not where they should be
     }
     
     func createPalletNode(size: CGSize, position: CGPoint) -> SKShapeNode {
@@ -232,39 +247,47 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         for t in touches { self.touchUp(atPoint: t.location(in: self)) }
     }
     
+    override func update(_ currentTime: TimeInterval) {
+        // Called before each frame is rendered
+        if gameStarted {
+            ensureBallHasMinimumVelocity()
+            moveTopPalletToBallXPosition()
+            
+            // If ball has no vertical movement, nudge so we can continue playing:
+                            // This may not be needed...
+            //                if isAbsoluteVelocityBelowLimit(velocity: verticalVelocityVector,
+            //                                                minLimit: minimumVelocityVectorDelta) {
+            //                    nudgeBallVertically(ball: ball, nudge: ballVelocityVectorNudge)
+            //                }
+        }
+    }
+    
+    func ensureBallHasMinimumVelocity() {
+        if let ball = ballNode {
+            let ballVelocity = ball.physicsBody!.velocity.length
+            if ballVelocity < minimumBallVelocity {
+                // Always make sure ball has minimum velocity:
+                ball.physicsBody?.velocity = convertVectorToLength(ball.physicsBody!.velocity,
+                                                                   length: minimumBallVelocity)
+            }
+        }
+    }
+    
+    func moveTopPalletToBallXPosition() {
+        if let ball = ballNode, let topPallet = topPalletNode {
+            topPallet.position.x = ball.position.x
+        }
+    }
+    
     func nudgeBallVertically(ball: SKShapeNode, nudge: CGFloat) {
         ball.physicsBody?.velocity.dy += nudge
     }
     
-    func computeVectorLength(_ vector: CGVector) -> CGFloat {
-        return hypot(vector.dx, vector.dy)
-    }
-    
     func convertVectorToLength(_ vector: CGVector, length: CGFloat) -> CGVector {
-        let originalVectorLength = computeVectorLength(vector)
+        let originalVectorLength = vector.length
         let dx = vector.dx * length / originalVectorLength
         let dy = vector.dy * length / originalVectorLength
         return CGVector(dx: dx, dy: dy)
     }
     
-    override func update(_ currentTime: TimeInterval) {
-        // Called before each frame is rendered
-        if gameStarted {
-            if let ball = ballNode {
-                let ballVelocity = computeVectorLength(ball.physicsBody!.velocity)
-                if ballVelocity < minimumBallVelocity {
-                    // Always make sure ball has minimum velocity:
-                    ball.physicsBody?.velocity = convertVectorToLength(ball.physicsBody!.velocity,
-                                                                       length: minimumBallVelocity)
-                }
-                
-                // If ball has no vertical movement, nudge so we can continue playing:
-                // This may not be needed...
-//                if isAbsoluteVelocityBelowLimit(velocity: verticalVelocityVector,
-//                                                minLimit: minimumVelocityVectorDelta) {
-//                    nudgeBallVertically(ball: ball, nudge: ballVelocityVectorNudge)
-//                }
-            }
-        }
-    }
 }
