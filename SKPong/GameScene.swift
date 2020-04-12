@@ -17,6 +17,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var topPalletNode: SKShapeNode?
     private var bottomPalletNode: SKShapeNode?
     private var ballNode: SKShapeNode?
+    private var ballRadius: CGFloat = 0
     
     private var leftWallNode: SKShapeNode?
     private var rightWallNode: SKShapeNode?
@@ -31,9 +32,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var palletNodeXMinBound: CGFloat?
     private var palletNodeXMaxBound: CGFloat?
     
-    private let ballCategory: UInt32    = 0x1 << 0
-    private let palletCategory: UInt32  = 0x1 << 1
-    private let wallCategory: UInt32    = 0x1 << 2
+    private let ballCategory: UInt32            = 0x1 << 0
+    private let palletCategory: UInt32          = 0x1 << 1
+    private let sideWallCategory: UInt32        = 0x1 << 2
+    private let topBottomWallCategory: UInt32   = 0x1 << 3
     
     private let minimumBallVelocity: CGFloat = 300.0
     private let initialBallVelocity: CGFloat = -300.0
@@ -42,7 +44,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     private var gameStarted: Bool = false
     private var sideWallCorrection: CGFloat = 40  // TODO: Should fix the core issue, shouldn't need this...
-    private var zeroGravityVector = CGVector(dx: 0, dy: 0)
+    private var topBottomWallOffset: CGFloat = 20  // Wall should be offscreen
+    private var zeroVector = CGVector(dx: 0, dy: 0)
+    
+    private var scorePlayer1: Int = 0
+    private var scorePlayer2: Int = 0
+    
+    private var scoreLabelPlayer1: SKLabelNode?
+    private var scoreLabelPlayer2: SKLabelNode?
     
     override func didMove(to view: SKView) {
         // Debugging:
@@ -51,18 +60,19 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let palletNodeSize = CGSize(width: self.size.width/5, height: self.size.height/40)
         initPalletNodes(palletNodeSize: palletNodeSize)
         
-        let ballRadius = palletNodeSize.width / 8
-        initBallNode(ballRadius: ballRadius)
+        ballRadius = palletNodeSize.width / 8
+        initBallNode(radius: ballRadius)
         
         initWallNodes()
         initPhysicsWorld()
+        initScoreLabels()
         
         // TODO: Figure out why side walls are not where they should be
         // TODO: Implement more realistic, last minute movement of top pallet
     }
     
     func initPhysicsWorld() {
-        self.physicsWorld.gravity = zeroGravityVector
+        self.physicsWorld.gravity = zeroVector
         self.physicsWorld.contactDelegate = self
     }
     
@@ -81,30 +91,55 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         self.addChild(bottomPalletNode!)
     }
     
-    func initBallNode(ballRadius: CGFloat) {
+    func initBallNode(radius: CGFloat) {
         let initialBallPosition = CGPoint(x: self.frame.midX, y: self.frame.midY)
-        ballNode = createBallNode(radius: ballRadius, position: initialBallPosition)
+        ballNode = createBallNode(radius: radius, position: initialBallPosition)
         self.addChild(ballNode!)
     }
     
     func initWallNodes() {
         let sideWallSize = CGSize(width: 10.0, height: self.size.height)
         let leftSideWallPosition = CGPoint(x: self.frame.minX + sideWallCorrection, y: self.frame.midY)
-        leftWallNode = createWallNode(size: sideWallSize, position: leftSideWallPosition)
+        leftWallNode = createWallNode(size: sideWallSize,
+                                      position: leftSideWallPosition,
+                                      category: sideWallCategory)
         self.addChild(leftWallNode!)
         
         let rightSideWallPosition = CGPoint(x: self.frame.maxX - sideWallCorrection, y: self.frame.midY)
-        rightWallNode = createWallNode(size: sideWallSize, position: rightSideWallPosition)
+        rightWallNode = createWallNode(size: sideWallSize,
+                                       position: rightSideWallPosition,
+                                       category: sideWallCategory)
         self.addChild(rightWallNode!)
         
         let topBottomWallSize = CGSize(width: self.size.width, height: 10.0)
-        let topWallPosition = CGPoint(x: self.frame.midX, y: self.frame.maxY)
-        topWallNode = createWallNode(size: topBottomWallSize, position: topWallPosition)
+        let topWallPosition = CGPoint(x: self.frame.midX, y: self.frame.maxY + topBottomWallOffset)
+        topWallNode = createWallNode(size: topBottomWallSize,
+                                     position: topWallPosition,
+                                     category: topBottomWallCategory)
         self.addChild(topWallNode!)
         
-        let bottomWallPosition = CGPoint(x: self.frame.midX, y: self.frame.minY)
-        bottomWallNode = createWallNode(size: topBottomWallSize, position: bottomWallPosition)
+        let bottomWallPosition = CGPoint(x: self.frame.midX, y: self.frame.minY - topBottomWallOffset)
+        bottomWallNode = createWallNode(size: topBottomWallSize,
+                                        position: bottomWallPosition,
+                                        category: topBottomWallCategory)
         self.addChild(bottomWallNode!)
+    }
+    
+    // TODO: Clean up this function:
+    func initScoreLabels() {
+        scoreLabelPlayer1 = SKLabelNode(text: "Score: 0")
+        scoreLabelPlayer1?.fontColor = .blue
+        let scoreLabelP1Size = scoreLabelPlayer1?.frame.size
+        scoreLabelPlayer1?.position = CGPoint(x: self.frame.minX + scoreLabelP1Size!.width,
+                                              y: self.frame.minY)
+        self.addChild(scoreLabelPlayer1!)
+        
+        scoreLabelPlayer2 = SKLabelNode(text: "Score: 0")
+        scoreLabelPlayer2?.fontColor = .red
+        let scoreLabelP2Size = scoreLabelPlayer2?.frame.size
+        scoreLabelPlayer2?.position = CGPoint(x: self.frame.minX + scoreLabelP2Size!.width,
+                                              y: self.frame.maxY - topBottomWallOffset * 2)
+        self.addChild(scoreLabelPlayer2!)
     }
     
     func createPalletNode(size: CGSize, position: CGPoint) -> SKShapeNode {
@@ -135,7 +170,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         return ball
     }
     
-    func createWallNode(size: CGSize, position: CGPoint) -> SKShapeNode {
+    func createWallNode(size: CGSize, position: CGPoint, category: UInt32) -> SKShapeNode {
         let wall = SKShapeNode(rectOf: size)
         wall.position = position
         wall.fillColor = .cyan
@@ -144,7 +179,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         wall.physicsBody?.isDynamic = false
         wall.physicsBody?.restitution = 1.0
         wall.physicsBody?.friction = 0.0
-        wall.physicsBody?.categoryBitMask = wallCategory
+        wall.physicsBody?.categoryBitMask = category
         wall.physicsBody?.contactTestBitMask = ballCategory
         return wall
     }
@@ -171,9 +206,35 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             secondBody = contact.bodyA
         }
         
-        if (firstBody.categoryBitMask & ballCategory) != 0 && (secondBody.categoryBitMask & wallCategory) != 0 {
-            ballDidCollideWithWall(ball: firstBody.node as! SKShapeNode,
-                                   wall: secondBody.node as! SKShapeNode)
+        if (firstBody.categoryBitMask & ballCategory) != 0 {
+            if (secondBody.categoryBitMask & sideWallCategory) != 0 {
+                ballDidCollideWithSideWall(ball: firstBody.node as! SKShapeNode,
+                                           wall: secondBody.node as! SKShapeNode)
+            } else if (secondBody.categoryBitMask & topBottomWallCategory) != 0 {
+                ballDidCollideWithTopBottomWall(wall: secondBody.node as! SKShapeNode)
+            }
+        }
+    }
+    
+    func ballDidCollideWithTopBottomWall(wall: SKShapeNode) {
+        if wall == topWallNode {
+            scorePlayer1 += 1
+            scoreLabelPlayer1?.text = "Score: \(scorePlayer1)"
+        } else if wall == bottomWallNode {
+            scorePlayer2 += 1
+            scoreLabelPlayer2?.text = "Score: \(scorePlayer2)"
+        }
+        
+        gameStarted = false
+        ballNode?.removeFromParent()
+        initBallNode(radius: ballRadius)
+    }
+
+    func ballDidCollideWithSideWall(ball: SKShapeNode, wall: SKShapeNode) {
+        let ballVelocityVector = ball.physicsBody!.velocity
+        if isAbsoluteVelocityBelowLimit(velocity: ballVelocityVector.dx, minLimit: minimumVelocityVectorDelta) ||
+            isAbsoluteVelocityBelowLimit(velocity: ballVelocityVector.dy, minLimit: minimumVelocityVectorDelta) {
+            nudgeWallBall(ball: ball, wall: wall, ballVelocity: ballVelocityVector)
         }
     }
     
@@ -199,14 +260,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             // This should never happen... Nudge in both directions?
             ball.physicsBody?.velocity = CGVector(dx: ballVelocity.dx + ballVelocityVectorNudge,
                                                   dy: ballVelocity.dy + ballVelocityVectorNudge)
-        }
-    }
-    
-    func ballDidCollideWithWall(ball: SKShapeNode, wall: SKShapeNode) {
-        let ballVelocityVector = ball.physicsBody!.velocity
-        if isAbsoluteVelocityBelowLimit(velocity: ballVelocityVector.dx, minLimit: minimumVelocityVectorDelta) ||
-            isAbsoluteVelocityBelowLimit(velocity: ballVelocityVector.dy, minLimit: minimumVelocityVectorDelta) {
-            nudgeWallBall(ball: ball, wall: wall, ballVelocity: ballVelocityVector)
         }
     }
     
@@ -266,7 +319,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         if let ball = ballNode {
             let ballVelocity = ball.physicsBody!.velocity.length
             if ballVelocity < minimumBallVelocity {
-                // Always make sure ball has minimum velocity:
                 ball.physicsBody?.velocity = convertVectorToLength(ball.physicsBody!.velocity,
                                                                    length: minimumBallVelocity)
             }
