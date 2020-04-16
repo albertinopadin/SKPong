@@ -52,6 +52,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     private var scoreLabelPlayer1: SKLabelNode?
     private var scoreLabelPlayer2: SKLabelNode?
+    private let scoreString = "Score:"
     
     override func didMove(to view: SKView) {
         // Debugging:
@@ -125,21 +126,29 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         self.addChild(bottomWallNode!)
     }
     
-    // TODO: Clean up this function:
     func initScoreLabels() {
-        scoreLabelPlayer1 = SKLabelNode(text: "Score: 0")
-        scoreLabelPlayer1?.fontColor = .blue
-        let scoreLabelP1Size = scoreLabelPlayer1?.frame.size
-        scoreLabelPlayer1?.position = CGPoint(x: self.frame.minX + scoreLabelP1Size!.width,
-                                              y: self.frame.minY)
+        let initialScore = getScoreText(score: 0)
+        
+        let scoreLabelP1Position = CGPoint(x: self.frame.minX, y: self.frame.minY + topBottomWallOffset)
+        scoreLabelPlayer1 = initLabelNode(text: initialScore, fontColor: .blue, position: scoreLabelP1Position)
         self.addChild(scoreLabelPlayer1!)
         
-        scoreLabelPlayer2 = SKLabelNode(text: "Score: 0")
-        scoreLabelPlayer2?.fontColor = .red
-        let scoreLabelP2Size = scoreLabelPlayer2?.frame.size
-        scoreLabelPlayer2?.position = CGPoint(x: self.frame.minX + scoreLabelP2Size!.width,
-                                              y: self.frame.maxY - topBottomWallOffset * 2)
+        let scoreLabelP2Position = CGPoint(x: self.frame.minX, y: self.frame.maxY - topBottomWallOffset * 3)
+        scoreLabelPlayer2 = initLabelNode(text: initialScore, fontColor: .red, position: scoreLabelP2Position)
         self.addChild(scoreLabelPlayer2!)
+    }
+    
+    func getScoreText(score: Int) -> String {
+        return "\(scoreString) \(score)"
+    }
+    
+    func initLabelNode(text: String, fontColor: UIColor, position: CGPoint) -> SKLabelNode {
+        let labelNode = SKLabelNode(text: text)
+        labelNode.fontColor = fontColor
+        let labelSize = labelNode.frame.size
+        let calibratedPosition = CGPoint(x: position.x + labelSize.width, y: position.y)
+        labelNode.position = calibratedPosition
+        return labelNode
     }
     
     func createPalletNode(size: CGSize, position: CGPoint) -> SKShapeNode {
@@ -219,10 +228,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     func ballDidCollideWithTopBottomWall(wall: SKShapeNode) {
         if wall == topWallNode {
             scorePlayer1 += 1
-            scoreLabelPlayer1?.text = "Score: \(scorePlayer1)"
+            scoreLabelPlayer1?.text = getScoreText(score: scorePlayer1)
         } else if wall == bottomWallNode {
             scorePlayer2 += 1
-            scoreLabelPlayer2?.text = "Score: \(scorePlayer2)"
+            scoreLabelPlayer2?.text = getScoreText(score: scorePlayer2)
         }
         
         gameStarted = false
