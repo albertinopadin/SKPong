@@ -19,12 +19,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var ballNode: SKShapeNode?
     private var ballRadius: CGFloat = 0
     
-    private var leftWallNode: SKShapeNode?
-    private var rightWallNode: SKShapeNode?
+    private var border: SKPhysicsBody!
     
-    // For testing only
-    private var topWallNode: SKShapeNode?
-    private var bottomWallNode: SKShapeNode?
+    private var previousTouchPoint: CGPoint?
     
     private let palletSeparation: CGFloat = 20.0
     private var topPalletNodeY: CGFloat?
@@ -32,10 +29,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var palletNodeXMinBound: CGFloat?
     private var palletNodeXMaxBound: CGFloat?
     
-    private let ballCategory: UInt32            = 0x1 << 0
-    private let palletCategory: UInt32          = 0x1 << 1
-    private let sideWallCategory: UInt32        = 0x1 << 2
-    private let topBottomWallCategory: UInt32   = 0x1 << 3
+    private let ballCategory: UInt32    = 0x1 << 0
+    private let palletCategory: UInt32  = 0x1 << 1
     
     private let minimumBallVelocity: CGFloat = 300.0
     private let initialBallVelocity: CGFloat = -300.0
@@ -43,8 +38,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private let minimumVelocityVectorDelta: CGFloat = 0.01
     
     private var gameStarted: Bool = false
-    private var sideWallCorrection: CGFloat = 40  // TODO: Should fix the core issue, shouldn't need this...
-    private var topBottomWallOffset: CGFloat = 20  // Wall should be offscreen
     private var zeroVector = CGVector(dx: 0, dy: 0)
     
     private var scorePlayer1: Int = 0
@@ -53,6 +46,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var scoreLabelPlayer1: SKLabelNode?
     private var scoreLabelPlayer2: SKLabelNode?
     private let scoreString = "Score:"
+    private let scoreLabelOffset: CGFloat = 20
     
     override func didMove(to view: SKView) {
         // Debugging:
@@ -64,17 +58,23 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         ballRadius = palletNodeSize.width / 8
         initBallNode(radius: ballRadius)
         
-        initWallNodes()
+        initBorder()
         initPhysicsWorld()
         initScoreLabels()
         
-        // TODO: Figure out why side walls are not where they should be
         // TODO: Implement more realistic, last minute movement of top pallet
     }
     
     func initPhysicsWorld() {
         self.physicsWorld.gravity = zeroVector
         self.physicsWorld.contactDelegate = self
+    }
+    
+    func initBorder() {
+        border = SKPhysicsBody(edgeLoopFrom: self.frame)
+        border.friction = 0
+        border.restitution = 1
+        self.physicsBody = border
     }
     
     func initPalletNodes(palletNodeSize: CGSize) {
@@ -98,42 +98,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         self.addChild(ballNode!)
     }
     
-    func initWallNodes() {
-        let sideWallSize = CGSize(width: 10.0, height: self.size.height)
-        let leftSideWallPosition = CGPoint(x: self.frame.minX + sideWallCorrection, y: self.frame.midY)
-        leftWallNode = createWallNode(size: sideWallSize,
-                                      position: leftSideWallPosition,
-                                      category: sideWallCategory)
-        self.addChild(leftWallNode!)
-        
-        let rightSideWallPosition = CGPoint(x: self.frame.maxX - sideWallCorrection, y: self.frame.midY)
-        rightWallNode = createWallNode(size: sideWallSize,
-                                       position: rightSideWallPosition,
-                                       category: sideWallCategory)
-        self.addChild(rightWallNode!)
-        
-        let topBottomWallSize = CGSize(width: self.size.width, height: 10.0)
-        let topWallPosition = CGPoint(x: self.frame.midX, y: self.frame.maxY + topBottomWallOffset)
-        topWallNode = createWallNode(size: topBottomWallSize,
-                                     position: topWallPosition,
-                                     category: topBottomWallCategory)
-        self.addChild(topWallNode!)
-        
-        let bottomWallPosition = CGPoint(x: self.frame.midX, y: self.frame.minY - topBottomWallOffset)
-        bottomWallNode = createWallNode(size: topBottomWallSize,
-                                        position: bottomWallPosition,
-                                        category: topBottomWallCategory)
-        self.addChild(bottomWallNode!)
-    }
-    
     func initScoreLabels() {
         let initialScore = getScoreText(score: 0)
         
-        let scoreLabelP1Position = CGPoint(x: self.frame.minX, y: self.frame.minY + topBottomWallOffset)
+        let scoreLabelP1Position = CGPoint(x: self.frame.minX, y: self.frame.minY + scoreLabelOffset)
         scoreLabelPlayer1 = initLabelNode(text: initialScore, fontColor: .blue, position: scoreLabelP1Position)
         self.addChild(scoreLabelPlayer1!)
         
-        let scoreLabelP2Position = CGPoint(x: self.frame.minX, y: self.frame.maxY - topBottomWallOffset * 3)
+        let scoreLabelP2Position = CGPoint(x: self.frame.minX, y: self.frame.maxY - scoreLabelOffset * 3)
         scoreLabelPlayer2 = initLabelNode(text: initialScore, fontColor: .red, position: scoreLabelP2Position)
         self.addChild(scoreLabelPlayer2!)
     }
@@ -158,8 +130,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         pallet.strokeColor = .white
         pallet.physicsBody = SKPhysicsBody(rectangleOf: size)
         pallet.physicsBody?.isDynamic = false
-        pallet.physicsBody?.restitution = 1.0
-        pallet.physicsBody?.linearDamping = 0.0
+        pallet.physicsBody?.restitution = 1
+        pallet.physicsBody?.linearDamping = 0
         pallet.physicsBody?.categoryBitMask = palletCategory
         pallet.physicsBody?.contactTestBitMask = ballCategory
         return pallet
@@ -172,125 +144,38 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         ball.strokeColor = .white
         ball.physicsBody = SKPhysicsBody(circleOfRadius: radius)
         ball.physicsBody?.isDynamic = true
-        ball.physicsBody?.restitution = 1.0
-        ball.physicsBody?.linearDamping = 0.0
+        ball.physicsBody?.restitution = 1
+        ball.physicsBody?.linearDamping = 0
+        ball.physicsBody?.angularDamping = 0
         ball.physicsBody?.categoryBitMask = ballCategory
         ball.physicsBody?.contactTestBitMask = palletCategory
         return ball
     }
     
-    func createWallNode(size: CGSize, position: CGPoint, category: UInt32) -> SKShapeNode {
-        let wall = SKShapeNode(rectOf: size)
-        wall.position = position
-        wall.fillColor = .cyan
-        wall.strokeColor = .lightGray
-        wall.physicsBody = SKPhysicsBody(rectangleOf: size)
-        wall.physicsBody?.isDynamic = false
-        wall.physicsBody?.restitution = 1.0
-        wall.physicsBody?.friction = 0.0
-        wall.physicsBody?.categoryBitMask = category
-        wall.physicsBody?.contactTestBitMask = ballCategory
-        return wall
-    }
-    
-    func calculatePalletNodeXPosition(touchPosition: CGPoint) -> CGFloat {
-        if touchPosition.x < palletNodeXMinBound! {
-            return palletNodeXMinBound!
-        } else if touchPosition.x > palletNodeXMaxBound! {
-            return palletNodeXMaxBound!
-        } else {
-            return touchPosition.x
-        }
-    }
-    
     func didBegin(_ contact: SKPhysicsContact) {
-        var firstBody: SKPhysicsBody
-        var secondBody: SKPhysicsBody
-        
-        if contact.bodyA.categoryBitMask < contact.bodyB.categoryBitMask {
-            firstBody = contact.bodyA
-            secondBody = contact.bodyB
-        } else {
-            firstBody = contact.bodyB
-            secondBody = contact.bodyA
-        }
-        
-        if (firstBody.categoryBitMask & ballCategory) != 0 {
-            if (secondBody.categoryBitMask & sideWallCategory) != 0 {
-                ballDidCollideWithSideWall(ball: firstBody.node as! SKShapeNode,
-                                           wall: secondBody.node as! SKShapeNode)
-            } else if (secondBody.categoryBitMask & topBottomWallCategory) != 0 {
-                ballDidCollideWithTopBottomWall(wall: secondBody.node as! SKShapeNode)
-            }
-        }
-    }
-    
-    func ballDidCollideWithTopBottomWall(wall: SKShapeNode) {
-        if wall == topWallNode {
-            scorePlayer1 += 1
-            scoreLabelPlayer1?.text = getScoreText(score: scorePlayer1)
-        } else if wall == bottomWallNode {
-            scorePlayer2 += 1
-            scoreLabelPlayer2?.text = getScoreText(score: scorePlayer2)
-        }
-        
-        gameStarted = false
-        ballNode?.removeFromParent()
-        initBallNode(radius: ballRadius)
-    }
-
-    func ballDidCollideWithSideWall(ball: SKShapeNode, wall: SKShapeNode) {
-        let ballVelocityVector = ball.physicsBody!.velocity
-        if isAbsoluteVelocityBelowLimit(velocity: ballVelocityVector.dx, minLimit: minimumVelocityVectorDelta) ||
-            isAbsoluteVelocityBelowLimit(velocity: ballVelocityVector.dy, minLimit: minimumVelocityVectorDelta) {
-            nudgeWallBall(ball: ball, wall: wall, ballVelocity: ballVelocityVector)
-        }
+//        var firstBody: SKPhysicsBody
+//        var secondBody: SKPhysicsBody
+//
+//        if contact.bodyA.categoryBitMask < contact.bodyB.categoryBitMask {
+//            firstBody = contact.bodyA
+//            secondBody = contact.bodyB
+//        } else {
+//            firstBody = contact.bodyB
+//            secondBody = contact.bodyA
+//        }
+//
+//        if (firstBody.categoryBitMask & ballCategory) != 0 {
+//            if (secondBody.categoryBitMask & sideWallCategory) != 0 {
+//                ballDidCollideWithSideWall(ball: firstBody.node as! SKShapeNode,
+//                                           wall: secondBody.node as! SKShapeNode)
+//            } else if (secondBody.categoryBitMask & topBottomWallCategory) != 0 {
+//                ballDidCollideWithTopBottomWall(wall: secondBody.node as! SKShapeNode)
+//            }
+//        }
     }
     
     func isAbsoluteVelocityBelowLimit(velocity: CGFloat, minLimit: CGFloat) -> Bool {
         return abs(velocity) < minLimit
-    }
-    
-    func nudgeWallBall(ball: SKShapeNode, wall: SKShapeNode, ballVelocity: CGVector) {
-        switch wall {
-        case leftWallNode:
-            ball.physicsBody?.velocity = CGVector(dx: ballVelocity.dx + ballVelocityVectorNudge,
-                                                  dy: ballVelocity.dy)
-        case rightWallNode:
-            ball.physicsBody?.velocity = CGVector(dx: ballVelocity.dx - ballVelocityVectorNudge,
-                                                  dy: ballVelocity.dy)
-        case topWallNode:
-            ball.physicsBody?.velocity = CGVector(dx: ballVelocity.dx,
-                                                  dy: ballVelocity.dy - ballVelocityVectorNudge)
-        case bottomWallNode:
-            ball.physicsBody?.velocity = CGVector(dx: ballVelocity.dx,
-                                                  dy: ballVelocity.dy + ballVelocityVectorNudge)
-        default:
-            // This should never happen... Nudge in both directions?
-            ball.physicsBody?.velocity = CGVector(dx: ballVelocity.dx + ballVelocityVectorNudge,
-                                                  dy: ballVelocity.dy + ballVelocityVectorNudge)
-        }
-    }
-    
-    func touchDown(atPoint pos : CGPoint) {
-        if let ball = ballNode {
-            if ball.physicsBody?.velocity.dx == 0.0 && ball.physicsBody?.velocity.dy == 0.0 {
-                ball.physicsBody?.velocity = CGVector(dx: 0.0, dy: initialBallVelocity)
-                gameStarted.toggle()
-            }
-        }
-    }
-    
-    func touchMoved(toPoint pos : CGPoint) {
-        if let bottomPallet = bottomPalletNode {
-            bottomPallet.position.x = calculatePalletNodeXPosition(touchPosition: pos)
-        }
-    }
-    
-    func touchUp(atPoint pos : CGPoint) {
-        if let bottomPallet = bottomPalletNode {
-            bottomPallet.position.x = calculatePalletNodeXPosition(touchPosition: pos)
-        }
     }
     
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -307,6 +192,49 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         for t in touches { self.touchUp(atPoint: t.location(in: self)) }
+    }
+    
+     func touchDown(atPoint pos : CGPoint) {
+        previousTouchPoint = pos
+        
+        if let ball = ballNode {
+            if ball.physicsBody?.velocity.dx == 0.0 && ball.physicsBody?.velocity.dy == 0.0 {
+//                ball.physicsBody?.velocity = CGVector(dx: 0.0, dy: initialBallVelocity)
+                ball.physicsBody?.applyImpulse(CGVector(dx: 10, dy: 10))
+                gameStarted.toggle()
+            }
+        }
+    }
+    
+    func touchMoved(toPoint pos : CGPoint) {
+        if let bottomPallet = bottomPalletNode {
+            bottomPallet.position.x += calculateTouchMoveChange(touchPoint: pos)
+        }
+    }
+    
+    func touchUp(atPoint pos : CGPoint) {
+        
+    }
+    
+    func calculateTouchMoveChange(touchPoint: CGPoint) -> CGFloat {
+        guard let previous = previousTouchPoint else {
+            previousTouchPoint = touchPoint
+            return 0.0
+        }
+        
+        let change = touchPoint.x - previous.x
+        previousTouchPoint = touchPoint
+        return change
+    }
+    
+    func calculatePalletNodeXPosition(touchPosition: CGPoint) -> CGFloat {
+        if touchPosition.x < palletNodeXMinBound! {
+            return palletNodeXMinBound!
+        } else if touchPosition.x > palletNodeXMaxBound! {
+            return palletNodeXMaxBound!
+        } else {
+            return touchPosition.x
+        }
     }
     
     override func update(_ currentTime: TimeInterval) {
@@ -336,7 +264,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     func moveTopPalletToBallXPosition() {
         if let ball = ballNode, let topPallet = topPalletNode {
-            topPallet.position.x = ball.position.x
+            topPallet.run(SKAction.moveTo(x: ball.position.x, duration: 1.0))
         }
     }
     
